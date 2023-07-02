@@ -1,6 +1,8 @@
 import { injectLambdaContext } from "@aws-lambda-powertools/logger";
 import { captureLambdaHandler } from "@aws-lambda-powertools/tracer";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
+import { SSMClient } from "@aws-sdk/client-ssm";
 import middy from "@middy/core";
 import httpHeaderNormalizer from "@middy/http-header-normalizer";
 import httpJsonBodyParser from "@middy/http-json-body-parser";
@@ -12,10 +14,11 @@ import {
   APIGatewayProxyResult,
   Context,
 } from "aws-lambda";
-import { OrdersRepository } from "./repositories/orders-repository";
-import { OrdersService } from "./services/orders-service";
+import { Shipment } from "./models/Shipment";
+import { ShipmentsRepository } from "./repositories/shipment-repository";
+import { ShipmentsService } from "./services/shipment-service";
 import { logger, tracer } from "./utils/common";
-import { Order } from "./models/Order";
+import { ShipmentEventService } from "./services/shipment-event-service";
 
 const headers = {
   "Access-Control-Allow-Methods": "*",
@@ -27,20 +30,33 @@ const ddbClient = tracer.captureAWSv3Client(
   new DynamoDBClient({ region: process.env.REGION })
 );
 
-const ordersRepository = new OrdersRepository({
+const ssmClient = tracer.captureAWSv3Client(
+  new SSMClient({ region: process.env.REGION })
+);
+
+const eventBridgeClient = tracer.captureAWSv3Client(
+  new EventBridgeClient({ region: process.env.REGION })
+);
+
+const shipmentsRepository = new ShipmentsRepository({
   ddbClient,
 });
 
-const ordersService = new OrdersService({
-  ordersRepository,
+const shipmentEventService = new ShipmentEventService({
+  eventBridgeClient,
 });
 
-const getOrdersHandler = middy().handler(
+const shipmentsService = new ShipmentsService({
+  shipmentsRepository,
+  shipmentEventService,
+});
+
+const getShipmentsHandler = middy().handler(
   async (
     _event: APIGatewayProxyEvent,
     _context: Context
   ): Promise<APIGatewayProxyResult> => {
-    const result = await ordersService.getOrders();
+    const result = await shipmentsService.getShipments();
 
     return {
       statusCode: 200,
@@ -50,7 +66,7 @@ const getOrdersHandler = middy().handler(
   }
 );
 
-const getOrderDetailsHandler = middy()
+const getShipmentDetailsHandler = middy()
   .use(
     validatorMiddleware({
       eventSchema: transpileSchema({
@@ -59,9 +75,9 @@ const getOrderDetailsHandler = middy()
         properties: {
           pathParameters: {
             type: "object",
-            required: ["orderId"],
+            required: ["shipmentId"],
             properties: {
-              orderId: {
+              shipmentId: {
                 type: "string",
               },
             },
@@ -75,9 +91,9 @@ const getOrderDetailsHandler = middy()
       event: APIGatewayProxyEvent,
       _context: Context
     ): Promise<APIGatewayProxyResult> => {
-      const orderId = event.pathParameters!.orderId!;
+      const shipmentId = event.pathParameters!.shipmentId!;
 
-      const result = await ordersService.getOrderById(orderId);
+      const result = await shipmentsService.getShipmentById(shipmentId);
 
       return result
         ? {
@@ -93,7 +109,7 @@ const getOrderDetailsHandler = middy()
     }
   );
 
-const createOrderHandler = middy()
+const createShipmentHandler = middy()
   .use(
     validatorMiddleware({
       eventSchema: transpileSchema({
@@ -102,9 +118,9 @@ const createOrderHandler = middy()
         properties: {
           body: {
             type: "object",
-            required: ["customerId"],
+            required: ["orderId"],
             properties: {
-              customerId: {
+              orderId: {
                 type: "string",
               },
             },
@@ -118,9 +134,9 @@ const createOrderHandler = middy()
       event: APIGatewayProxyEvent,
       _context: Context
     ): Promise<APIGatewayProxyResult> => {
-      const order = event.body as any as Omit<Order, "orderId">;
+      const shipment = event.body as any as Omit<Shipment, "shipmentId">;
 
-      const result = await ordersService.createOrder(order);
+      const result = await shipmentsService.createShipment(shipment);
 
       return {
         statusCode: 200,
@@ -130,7 +146,7 @@ const createOrderHandler = middy()
     }
   );
 
-const deleteOrderDetailsHandler = middy()
+const deleteShipmentDetailsHandler = middy()
   .use(
     validatorMiddleware({
       eventSchema: transpileSchema({
@@ -139,9 +155,9 @@ const deleteOrderDetailsHandler = middy()
         properties: {
           pathParameters: {
             type: "object",
-            required: ["orderId"],
+            required: ["shipmentId"],
             properties: {
-              orderId: {
+              shipmentId: {
                 type: "string",
               },
             },
@@ -155,21 +171,21 @@ const deleteOrderDetailsHandler = middy()
       event: APIGatewayProxyEvent,
       _context: Context
     ): Promise<APIGatewayProxyResult> => {
-      const orderId = event.pathParameters!.orderId!;
+      const shipmentId = event.pathParameters!.shipmentId!;
 
-      await ordersService.deleteOrder(orderId);
+      await shipmentsService.deleteShipment(shipmentId);
 
       return {
         statusCode: 200,
         body: JSON.stringify({
-          message: "Order deleted.",
+          message: "Shipment deleted.",
         }),
         headers,
       };
     }
   );
 
-const updateOrderHandler = middy()
+const updateShipmentHandler = middy()
   .use(
     validatorMiddleware({
       eventSchema: transpileSchema({
@@ -178,8 +194,11 @@ const updateOrderHandler = middy()
         properties: {
           body: {
             type: "object",
-            required: ["orderId"],
+            required: ["orderId", "shipmentId"],
             properties: {
+              shipmentId: {
+                type: "string",
+              },
               orderId: {
                 type: "string",
               },
@@ -194,9 +213,9 @@ const updateOrderHandler = middy()
       event: APIGatewayProxyEvent,
       _context: Context
     ): Promise<APIGatewayProxyResult> => {
-      const order = event.body as any as Order;
+      const shipment = event.body as any as Shipment;
 
-      const result = await ordersService.updateOrder(order);
+      const result = await shipmentsService.updateShipment(shipment);
 
       return {
         statusCode: 200,
@@ -209,28 +228,28 @@ const updateOrderHandler = middy()
 const routes: Route<APIGatewayProxyEvent>[] = [
   {
     method: "GET",
-    handler: getOrdersHandler,
-    path: "/orders",
+    handler: getShipmentsHandler,
+    path: "/shipments",
   },
   {
     method: "GET",
-    handler: getOrderDetailsHandler,
-    path: "/orders/details/{orderId}",
+    handler: getShipmentDetailsHandler,
+    path: "/shipments/details/{shipmentId}",
   },
   {
     method: "POST",
-    handler: createOrderHandler,
-    path: "/orders",
+    handler: createShipmentHandler,
+    path: "/shipments",
   },
   {
     method: "DELETE",
-    handler: deleteOrderDetailsHandler,
-    path: "/orders/details/{orderId}",
+    handler: deleteShipmentDetailsHandler,
+    path: "/shipments/details/{shipmentId}",
   },
   {
     method: "PUT",
-    handler: updateOrderHandler,
-    path: "/orders",
+    handler: updateShipmentHandler,
+    path: "/shipments",
   },
 ];
 

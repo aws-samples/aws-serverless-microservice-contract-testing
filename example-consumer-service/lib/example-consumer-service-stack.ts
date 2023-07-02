@@ -11,20 +11,20 @@ import {
   MethodLoggingLevel,
   RestApi,
 } from "aws-cdk-lib/aws-apigateway";
-import {
-  AdvancedSecurityMode,
-  CfnUserPoolResourceServer,
-  OAuthScope,
-  UserPool,
-} from "aws-cdk-lib/aws-cognito";
+import { AdvancedSecurityMode, UserPool } from "aws-cdk-lib/aws-cognito";
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as targets from "aws-cdk-lib/aws-events-targets";
 import { AttributeType, Table } from "aws-cdk-lib/aws-dynamodb";
+import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { IFunction } from "aws-cdk-lib/aws-lambda";
 import { LogGroup } from "aws-cdk-lib/aws-logs";
-import { StringParameter } from "aws-cdk-lib/aws-ssm";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
 import * as path from "path";
 import { NodejsFunctionWithRole } from "./constructs/NodejsFunctionWithRole";
+import { EventBus, Rule } from "aws-cdk-lib/aws-events";
+import { Queue } from "aws-cdk-lib/aws-sqs";
+import { StringParameter } from "aws-cdk-lib/aws-ssm";
 
 interface AddApiResourceProps {
   parentResource: IResource;
@@ -34,13 +34,36 @@ interface AddApiResourceProps {
   cognitoAuthorizer: CognitoUserPoolsAuthorizer;
 }
 
-export class ExampleProducerServiceStack extends cdk.Stack {
+export class ExampleConsumerServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const ordersTable = new Table(this, "OrdersTable", {
+    const shipmentEventBus = new EventBus(this, "ShipmentEventsbus");
+
+    const shipmentEventDLQ = new Queue(this, "ShipmentEventDLQ", {
+      enforceSSL: true,
+    });
+    const shipmentEventQueue = new Queue(this, "ShipmentEventQueue", {
+      enforceSSL: true,
+      visibilityTimeout: cdk.Duration.seconds(10),
+      deadLetterQueue: {
+        queue: shipmentEventDLQ,
+        maxReceiveCount: 3,
+      },
+    });
+
+    const shipmentEventRule = new Rule(this, "ShipmentEventRule", {
+      eventBus: shipmentEventBus,
+      eventPattern: {
+        source: ["com.demo.shipment"],
+      },
+    });
+
+    shipmentEventRule.addTarget(new targets.SqsQueue(shipmentEventQueue));
+
+    const shipmentsTable = new Table(this, "ShipmentsTable", {
       partitionKey: {
-        name: "orderId",
+        name: "shipmentId",
         type: AttributeType.STRING,
       },
     });
@@ -56,55 +79,7 @@ export class ExampleProducerServiceStack extends cdk.Stack {
       advancedSecurityMode: AdvancedSecurityMode.ENFORCED,
     });
 
-    const cognitoDomain = userPool.addDomain("CognitoDomain", {
-      cognitoDomain: {
-        domainPrefix: "orders",
-      },
-    });
-
-    const ordersResourceServer = new CfnUserPoolResourceServer(
-      this,
-      "dev-userpool-resource-server",
-      {
-        identifier: "orders",
-        name: "orders-service",
-        userPoolId: userPool.userPoolId,
-        scopes: [
-          {
-            scopeDescription: "Read Orders Data",
-            scopeName: "read",
-          },
-          {
-            scopeDescription: "Write Orders Data",
-            scopeName: "write",
-          },
-        ],
-      }
-    );
-
-    const client = userPool.addClient("FulfillmentServiceClient", {
-      generateSecret: true,
-      authFlows: {
-        adminUserPassword: true,
-        userPassword: true,
-        userSrp: true,
-      },
-      oAuth: {
-        flows: {
-          clientCredentials: true,
-          authorizationCodeGrant: false,
-          implicitCodeGrant: false,
-        },
-        scopes: [
-          OAuthScope.custom("orders/read"),
-          OAuthScope.custom("orders/write"),
-        ],
-      },
-    });
-
-    client.node.addDependency(ordersResourceServer);
-
-    userPool.addClient("UserPoolClientForPostman", {
+    const client = userPool.addClient("UserPoolClient", {
       authFlows: {
         adminUserPassword: true,
         userPassword: true,
@@ -123,20 +98,36 @@ export class ExampleProducerServiceStack extends cdk.Stack {
     const handler = new NodejsFunctionWithRole(this, "Handler", {
       entry: `${path.resolve(
         __dirname
-      )}/../lambdas/producer-service-handler/src/index.ts`,
+      )}/../lambdas/consumer-service-handler/src/index.ts`,
       environment: {
-        TABLE_NAME_ORDERS: ordersTable.tableName,
+        TABLE_NAME_SHIPMENTS: shipmentsTable.tableName,
+        EVENTBUS_NAME_SHIPMENT: shipmentEventBus.eventBusName,
       },
     });
 
-    ordersTable.grantReadWriteData(handler.executionRole);
+    shipmentEventBus.grantPutEventsTo(handler.executionRole);
+    shipmentsTable.grantReadWriteData(handler.executionRole);
+
+    handler.executionRole.addToPolicy(
+      new PolicyStatement({
+        sid: "AllowSSMGetOrderParameters",
+        effect: Effect.ALLOW,
+        actions: ["ssm:GetParameters"],
+        resources: [
+          `arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/app/order/cognitoUrl`,
+          `arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/app/order/clientId`,
+          `arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/app/order/clientSecret`,
+          `arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/app/order/serviceURL`,
+        ],
+      })
+    );
 
     const logGroup = new LogGroup(this, "ApiLogs");
 
-    const restApi = new RestApi(this, "ProducerServiceAPI", {
-      restApiName: "Example Producer Service API",
+    const restApi = new RestApi(this, "ConsumerServiceAPI", {
+      restApiName: "Example Consumer Service API",
       description:
-        "An example of a service that produces some data that consumer service needs",
+        "An example of a consumer service that is dependent on another service",
       endpointConfiguration: {
         types: [EndpointType.REGIONAL],
       },
@@ -154,46 +145,49 @@ export class ExampleProducerServiceStack extends cdk.Stack {
         allowHeaders: Cors.DEFAULT_HEADERS,
       },
       defaultIntegration: new LambdaIntegration(handler.function),
+      defaultMethodOptions: {
+        authorizationType: AuthorizationType.COGNITO,
+        authorizer: cognitoAuthorizer,
+      },
       cloudWatchRole: true,
     });
 
-    const ordersResource = this.addLambdaBackedEndpoint({
+    const shipmentsResource = this.addLambdaBackedEndpoint({
       parentResource: restApi.root,
-      resourceName: "orders",
+      resourceName: "shipments",
       methods: ["POST", "PUT", "GET"],
       handler: handler.function,
       cognitoAuthorizer,
     });
 
-    const ordersDetailsResource = ordersResource.addResource("details");
+    const shipmentsDetailsResource = shipmentsResource.addResource("details");
 
     this.addLambdaBackedEndpoint({
-      parentResource: ordersDetailsResource,
-      resourceName: "{orderId}",
+      parentResource: shipmentsDetailsResource,
+      resourceName: "{shipmentId}",
       methods: ["GET", "DELETE"],
       handler: handler.function,
       cognitoAuthorizer,
     });
 
-    new StringParameter(this, "OrdersServiceURL", {
-      stringValue: restApi.url,
-      parameterName: "/app/order/serviceURL",
-    });
+    const shipmentEventHandler = new NodejsFunctionWithRole(
+      this,
+      "ShipmentEventHandler",
+      {
+        entry: `${path.resolve(
+          __dirname
+        )}/../lambdas/consumer-service-event-handler/src/index.ts`,
+        environment: {
+          EVENTBUS_NAME_SHIPMENT: shipmentEventBus.eventBusName,
+        },
+      }
+    );
 
-    new StringParameter(this, "OrderClientId", {
-      stringValue: client.userPoolClientId,
-      parameterName: "/app/order/clientId",
-    });
+    const shipmentEventSource = new lambdaEventSources.SqsEventSource(
+      shipmentEventQueue
+    );
 
-    new StringParameter(this, "OrderCognitoURL", {
-      stringValue: `https://${cognitoDomain.domainName}.auth.${cdk.Aws.REGION}.amazoncognito.com`,
-      parameterName: "/app/order/cognitoUrl",
-    });
-
-    new StringParameter(this, "OrderCognitoUserPoolId", {
-      stringValue: userPool.userPoolId,
-      parameterName: "/app/order/userPoolId",
-    });
+    shipmentEventHandler.function.addEventSource(shipmentEventSource);
 
     NagSuppressions.addResourceSuppressions(
       restApi,
@@ -220,6 +214,16 @@ export class ExampleProducerServiceStack extends cdk.Stack {
       ],
       true
     );
+
+    new StringParameter(this, "ShipmentCognitoUserPoolId", {
+      parameterName: "/app/shipment/userPoolId",
+      stringValue: userPool.userPoolId,
+    });
+
+    new StringParameter(this, "ShipmentCognitoClientId", {
+      parameterName: "/app/shipment/clientId",
+      stringValue: client.userPoolClientId,
+    });
   }
 
   private addLambdaBackedEndpoint(props: AddApiResourceProps) {
@@ -229,7 +233,6 @@ export class ExampleProducerServiceStack extends cdk.Stack {
       newResource.addMethod(method, new LambdaIntegration(props.handler), {
         authorizationType: AuthorizationType.COGNITO,
         authorizer: props.cognitoAuthorizer,
-        authorizationScopes: ["orders/read", "orders/write"],
       });
     }
     return newResource;

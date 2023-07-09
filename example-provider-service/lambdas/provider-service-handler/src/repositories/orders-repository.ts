@@ -39,8 +39,8 @@ export class OrdersRepository implements IOrdersRepository {
       // THE EXAMPLE CONSUMER SERVICE HAS GENERATED A CONTRACT
       // THAT EXPECTS dateTimePlaced TO BE A STRING IN ISO DATE FORMAT
       // USING UTC STRING FORMAT WILL BREAK THE CONTRACT TEST
-      // dateTimePlaced: record.dateTimePlaced || new Date().toISOString(),
-      dateTimePlaced: record.dateTimePlaced || new Date().toUTCString(),
+      dateTimePlaced: record.dateTimePlaced || new Date().toISOString(),
+      // dateTimePlaced: record.dateTimePlaced || new Date().toUTCString(),
     };
   }
 

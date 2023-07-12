@@ -46,7 +46,7 @@
       "response": {
         "body": {
           "customerId": "some string",
-          "dateTimePlaced": "2023-07-08T22:57:55.324Z",
+          "dateTimePlaced": "2023-07-12T01:06:43.013Z",
           "orderId": "e2490de5-5bd3-43d5-b7c4-526e33f71304",
           "status": "some string"
         },
@@ -113,7 +113,7 @@
   ],
   "metadata": {
     "pact-js": {
-      "version": "11.0.2"
+      "version": "12.0.0"
     },
     "pactRust": {
       "ffi": "0.4.0",

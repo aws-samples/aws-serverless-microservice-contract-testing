@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@aws-lambda-powertools/logger": "^1.10.0",
-    "@aws-lambda-powertools/tracer": "^1.11.0",
+    "@aws-lambda-powertools/tracer": "^1.11.1",
     "@middy/core": "^4.5.2",
     "@middy/http-header-normalizer": "^4.5.2",
     "@middy/http-json-body-parser": "^4.5.2",

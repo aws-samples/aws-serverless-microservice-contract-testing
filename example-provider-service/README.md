@@ -12,7 +12,7 @@ To see an example of a breaking change that would break the consumer driven cont
 
 ## Architecture Diagram
 
-[Architecture Diagram](./images/OrderServiceArchitectureDiagram.jpg)
+![Architecture Diagram](./images/OrderServiceArchitectureDiagram.jpg?raw=true)
 
 ## Useful commands
 

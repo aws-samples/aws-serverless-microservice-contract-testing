@@ -14,4 +14,4 @@ These projects utilize the open source code-first tool, [Pact](https://docs.pact
 
 ## Architecture
 
-[Architecture Diagram](./images/Full-Architecture-Diagram.png)
+![Architecture Diagram](./images/Full-Architecture-Diagram.png?raw=true)

@@ -6,6 +6,10 @@ This is an example AWS CDK serverless microservice project that is set up to pro
 
 See commands below on how to deploy this project and run the associated provider verification tests impemented by the example consumer service. The provider verficiation tests are implemented with notes [here](./test/provider-verification-tests/provider-verification-tests.test.ts)
 
+As a developer, you can utilize contract testing as a mechanism to validate if your changes will break any downstream consumers, without having to deploy your changes to an environment that will cause downtime. Since this is a serverless microservice, AWS SAM is very helpful to run the provider verification step of the contract testing process. This project uses AWS SAM CLI to run the serverless microservice locally.
+
+To see an example of a breaking change that would break the consumer driven contract defined by example-consumer-service, see the details in [orders-repository.ts](./lambdas/provider-service-handler/src/repositories/orders-repository.ts)
+
 ## Architecture Diagram
 
 [Architecture Diagram](./images/OrderServiceArchitectureDiagram.jpg)

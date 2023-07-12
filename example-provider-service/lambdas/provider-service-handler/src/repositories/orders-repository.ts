@@ -35,10 +35,16 @@ export class OrdersRepository implements IOrdersRepository {
       orderId: record.orderId || this.generatePK(),
       customerId: record.customerId || "N/A",
       status: "NEW",
-      // MODIFY THE CODE BELOW BY UNCOMMENTING/UNCOMMENTING ONE OF THE TWO LINES
-      // THE EXAMPLE CONSUMER SERVICE HAS GENERATED A CONTRACT
-      // THAT EXPECTS dateTimePlaced TO BE A STRING IN ISO DATE FORMAT
-      // USING UTC STRING FORMAT WILL BREAK THE CONTRACT TEST
+
+      /**
+       * CONTRACT TESTING DEMO:
+       * MODIFY THE CODE BELOW BY UNCOMMENTING/UNCOMMENTING ONE OF THE TWO LINES
+       * THE EXAMPLE CONSUMER SERVICE HAS GENERATED A CONTRACT
+       * THAT EXPECTS dateTimePlaced TO BE A STRING IN ISO DATE FORMAT
+       * AS A DEVELOPER, YOU WOULD BE ABLE TO UTILIZE CONTRACT TESTING TO SEE IF THIS IS BREAKING CHANGE OR NOT
+       * USING ISO STRING FORMAT WILL NOT BREAK THE CONTRACT TEST -> UNIT TESTS WILL PASS
+       * USING UTC STRING FORMAT WILL BREAK THE CONTRACT TEST -> UNIT TESTS WILL FAIL
+       */
       dateTimePlaced: record.dateTimePlaced || new Date().toISOString(),
       // dateTimePlaced: record.dateTimePlaced || new Date().toUTCString(),
     };

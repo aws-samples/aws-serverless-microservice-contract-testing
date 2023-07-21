@@ -13,9 +13,8 @@ import {
 } from "aws-lambda";
 import { OrdersRepository } from "./repositories/orders-repository";
 import { OrdersService } from "./services/orders-service";
-import { logger, tracer } from "./utils/common";
+import { logger } from "./utils/common";
 import { Order } from "./models/Order";
-import { captureLambdaHandler } from "@aws-lambda-powertools/tracer";
 
 const headers = {
   "Access-Control-Allow-Methods": "*",
@@ -23,9 +22,7 @@ const headers = {
   "Access-Control-Allow-Origin": "*",
 };
 
-const ddbClient = tracer.captureAWSv3Client(
-  new DynamoDBClient({ region: process.env.REGION })
-);
+const ddbClient = new DynamoDBClient({ region: process.env.REGION });
 
 const ordersRepository = new OrdersRepository({
   ddbClient,
@@ -237,7 +234,6 @@ const routes: Route<APIGatewayProxyEvent>[] = [
 export const handler = middy()
   .use(httpHeaderNormalizer())
   .use(httpJsonBodyParser())
-  .use(captureLambdaHandler(tracer))
   .use(
     injectLambdaContext(logger, {
       clearState: true,

@@ -34,7 +34,7 @@ export class OrdersRepository implements IOrdersRepository {
     return {
       orderId: record.orderId || this.generatePK(),
       customerId: record.customerId || "N/A",
-      status: "NEW",
+      status: record.status || "NEW",
 
       /**
        * CONTRACT TESTING DEMO:
@@ -110,6 +110,14 @@ export class OrdersRepository implements IOrdersRepository {
       new PutItemCommand({
         TableName: this.ordersTableName,
         Item: marshall(translatedOrder),
+        ConditionExpression:
+          "attribute_exists(orderId) AND #orderId = :orderId",
+        ExpressionAttributeNames: {
+          "#orderId": "orderId",
+        },
+        ExpressionAttributeValues: {
+          ":orderId": { S: translatedOrder.orderId },
+        },
       })
     );
 

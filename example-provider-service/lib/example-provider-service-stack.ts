@@ -172,6 +172,15 @@ export class ExampleProviderServiceStack extends cdk.Stack {
       cognitoAuthorizer,
     });
 
+    // This will lead to more consistent error handling for authorized users.
+    this.addLambdaBackedEndpoint({
+      parentResource: restApi.root,
+      resourceName: "{proxy+}",
+      methods: ["ANY"],
+      handler: handler.function,
+      cognitoAuthorizer,
+    });
+
     new StringParameter(this, "OrdersServiceURL", {
       stringValue: restApi.url.slice(0, -1),
       parameterName: "/app/order/serviceURL",

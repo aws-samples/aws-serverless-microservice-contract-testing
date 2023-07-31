@@ -166,6 +166,21 @@ const deleteOrderDetailsHandler = middy()
     }
   );
 
+const notFoundHandler = middy().handler(
+  async (
+    _event: APIGatewayProxyEvent,
+    _context: Context
+  ): Promise<APIGatewayProxyResult> => {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({
+        message: "Resource Not Found.",
+      }),
+      headers,
+    };
+  }
+);
+
 const updateOrderHandler = middy()
   .use(
     validatorMiddleware({
@@ -193,7 +208,22 @@ const updateOrderHandler = middy()
     ): Promise<APIGatewayProxyResult> => {
       const order = event.body as any as Order;
 
-      const result = await ordersService.updateOrder(order);
+      let result;
+
+      try {
+        result = await ordersService.updateOrder(order);
+      } catch (err) {
+        if ((err as any)?.name === "ConditionalCheckFailedException") {
+          return {
+            statusCode: 404,
+            body: JSON.stringify({
+              message: "Existing Order is not found to update.",
+            }),
+            headers,
+          };
+        }
+        throw err;
+      }
 
       return {
         statusCode: 200,
@@ -228,6 +258,11 @@ const routes: Route<APIGatewayProxyEvent>[] = [
     method: "PUT",
     handler: updateOrderHandler,
     path: "/orders",
+  },
+  {
+    method: "ANY",
+    handler: notFoundHandler,
+    path: "/{proxy+}",
   },
 ];
 

@@ -46,7 +46,7 @@
       "response": {
         "body": {
           "customerId": "some string",
-          "dateTimePlaced": "2023-07-12T01:06:43.013Z",
+          "dateTimePlaced": "2023-08-15T13:21:09.996Z",
           "orderId": "e2490de5-5bd3-43d5-b7c4-526e33f71304",
           "status": "some string"
         },

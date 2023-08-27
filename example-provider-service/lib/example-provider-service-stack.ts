@@ -56,14 +56,11 @@ export class ExampleProviderServiceStack extends cdk.Stack {
       advancedSecurityMode: AdvancedSecurityMode.ENFORCED,
     });
 
-    /**
-     * THIS COGNITO DOMAIN MAY BE TAKEN.
-     * IF YOU GET AN ERROR REGARDING THE COGNITO DOMAIN ALREADY BEING USED,
-     * PLEASE UPDATE THE DOMAIN PREFIX BELOW TO SOMETHING UNIQUE.
-     */
     const cognitoDomain = userPool.addDomain("CognitoDomain", {
       cognitoDomain: {
-        domainPrefix: "orders",
+        domainPrefix: `orders-${cdk.Aws.ACCOUNT_ID}-${
+          cdk.Aws.STACK_ID.split("/")[2]
+        }`,
       },
     });
 

@@ -58,9 +58,7 @@ export class ExampleProviderServiceStack extends cdk.Stack {
 
     const cognitoDomain = userPool.addDomain("CognitoDomain", {
       cognitoDomain: {
-        domainPrefix: `orders-${cdk.Aws.ACCOUNT_ID}-${
-          cdk.Aws.STACK_ID.split("/")[2]
-        }`,
+        domainPrefix: `orders-${cdk.Aws.ACCOUNT_ID}`,
       },
     });
 
@@ -84,7 +82,7 @@ export class ExampleProviderServiceStack extends cdk.Stack {
       }
     );
 
-    const client = userPool.addClient("FulfillmentServiceClient", {
+    const client = userPool.addClient("OrderServiceClient", {
       generateSecret: true,
       authFlows: {
         adminUserPassword: true,
